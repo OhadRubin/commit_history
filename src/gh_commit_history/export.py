@@ -4,7 +4,7 @@
     first, in UTC. Multi-line messages become literal blocks and long lines are never folded, so
     every description loads back exactly as it was committed.
 - usage:
-    uv run python -c "import pathlib, gh_commit_history as g; a = g.Account(); g.write_yaml(g.collect(a, a.emails, pathlib.Path('/dev/shm/mirrors')), a.login, pathlib.Path('commits.yaml'))"  # Export to commits.yaml.
+    uv run python -c "import pathlib, gh_commit_history as g; a = g.Account(); g.write_yaml(g.collect(a, set(), pathlib.Path('/dev/shm/mirrors')), a.login, pathlib.Path('commits.yaml'))"  # Export to commits.yaml.
 - user_story:
     content: |
       Someone wants their commit history as a file they can read, grep, and hand to other tools.

@@ -1,11 +1,12 @@
 """
 - description:
-    End-to-end check. Runs the CLI for the gh-authenticated account, then confirms that the YAML is
-    newest first and holds every commit GitHub search credits to the account. Writes the findings
-    to a JSON report beside the YAML, so a run leaves both the export and its verification.
+    End-to-end check. Collects and exports the gh-authenticated account's commits, then confirms
+    that the YAML is newest first and holds every commit GitHub search credits to the account.
+    Writes the findings to a JSON report beside the YAML, so a run leaves both the export and its
+    verification.
 - usage:
-    uv run python tests/e2e.py /dev/shm/e2e/commits.yaml --store /dev/shm/e2e/mirrors  # Export and verify.
-    uv run python tests/e2e.py out.yaml --store /dev/shm/mirrors --email me@lab.local  # Arguments after the script go to the CLI.
+    uv run python tests/e2e.py /dev/shm/e2e/commits.yaml /dev/shm/e2e/mirrors  # Export and verify.
+    uv run python tests/e2e.py out.yaml /dev/shm/mirrors me@lab.local  # Also match an extra address.
 - user_story:
     content: |
       Before trusting the export, its author wants independent evidence that nothing GitHub knows
@@ -16,21 +17,23 @@
 
 import json
 import pathlib
-import subprocess
 import sys
 
 import yaml
 
-from gh_commit_history.discovery import Account
+from gh_commit_history import Account, collect, write_yaml
 
-output = pathlib.Path(sys.argv[1])
-subprocess.run(['gh-commit-history', *sys.argv[1:]], check=True)
+output, store = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+# One account object serves the export and the check, so the long author search runs once.
+account = Account()
+store.mkdir(parents=True, exist_ok=True)
+write_yaml(collect(account, set(sys.argv[3:]), store), account.login, output)
 
 rows = yaml.safe_load(output.read_text(encoding='utf-8'))
 # PyYAML loads unquoted dates as date objects, so moments are compared as text.
 moments = [(str(row['date']), row['time']) for row in rows]
 exported = {row['sha'] for row in rows}
-credited = {item['sha']: item['html_url'] for item in Account().authored}
+credited = {item['sha']: item['html_url'] for item in account.authored}
 missing = sorted(url for sha, url in credited.items() if sha not in exported)
 
 report = {'exported': len(rows), 'unique_shas': len(exported), 'credited_by_search': len(credited),

@@ -100,5 +100,8 @@ def pull_request_targets(account: Account) -> Iterator[str]:
 
 @repository_source
 def credited(account: Account) -> Iterator[str]:
-    """Repositories holding credited commits, including ones the account has no role in."""
-    yield from (item['repository']['full_name'] for item in account.authored)
+    """Repositories of other owners holding credited commits, including ones the account has no role in."""
+    # `accessible` already lists the account's own repositories, which hold most of its commits.
+    query = f'author:{account.login} -user:{account.login}'
+    yield from (item['repository']['full_name']
+                for item in search('search/commits', query, 'author-date', EARLIEST, LATEST))

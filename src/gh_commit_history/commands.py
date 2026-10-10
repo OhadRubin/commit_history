@@ -12,14 +12,16 @@
     was_generated_via_skill: false
 """
 
+import itertools
 import json
 import pathlib
 import shlex
 import subprocess
 import time
 
-# Server errors and rate limits from GitHub clear on their own within a minute.
-TRANSIENT = ('(HTTP 5', 'rate limit')
+# Seconds to wait before each retry, by a marker in gh's error. Server errors clear within
+# seconds. For rate limits GitHub asks for at least a minute, growing on every repeat.
+RETRY_WAITS = {'(HTTP 5': (10, 10), 'rate limit': (60, 120, 240, 480)}
 
 
 def run(*args: str) -> bytes:
@@ -35,13 +37,14 @@ def gh(endpoint: str, **fields) -> object:
     args = ['gh', 'api', '--method', 'GET', endpoint]
     for key, value in fields.items():
         args += ['-f', f'{key}={value}']
-    for attempt in range(3):
+    for attempt in itertools.count():
         try:
             return json.loads(run(*args))
         except RuntimeError as error:
-            if attempt == 2 or not any(marker in str(error) for marker in TRANSIENT):
+            waits = next((waits for marker, waits in RETRY_WAITS.items() if marker in str(error)), ())
+            if attempt >= len(waits):
                 raise
-            time.sleep(60)
+            time.sleep(waits[attempt])
 
 
 def git(directory: pathlib.Path, *args: str) -> bytes:

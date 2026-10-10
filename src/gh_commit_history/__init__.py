@@ -4,7 +4,7 @@
     and pull request heads of every repository it can find, to a YAML file.
 - usage:
     uv run gh-commit-history commits.yaml --store /dev/shm/mirrors  # Export from the shell.
-    uv run python -c "import pathlib, gh_commit_history as g; a = g.Account(); g.write_yaml(g.collect(a, a.emails, pathlib.Path('/dev/shm/mirrors')), a.login, pathlib.Path('commits.yaml'))"  # Same, from Python.
+    uv run python -c "import pathlib, gh_commit_history as g; a = g.Account(); g.write_yaml(g.collect(a, set(), pathlib.Path('/dev/shm/mirrors')), a.login, pathlib.Path('commits.yaml'))"  # Same, from Python.
 - user_story:
     content: |
       Anyone with a GitHub account wants one file listing every commit they ever authored, with

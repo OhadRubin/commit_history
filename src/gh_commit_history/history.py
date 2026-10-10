@@ -4,7 +4,7 @@
     partial clone holding its branches, tags, and pull request heads without file trees, so reading
     its whole history costs little more than the commit records themselves.
 - usage:
-    uv run python -c "import pathlib, gh_commit_history as g; a = g.Account(); print(len(g.collect(a, a.emails, pathlib.Path('/dev/shm/mirrors'))))"  # Count your commits.
+    uv run python -c "import pathlib, gh_commit_history as g; a = g.Account(); print(len(g.collect(a, set(), pathlib.Path('/dev/shm/mirrors'))))"  # Count your commits.
 - user_story:
     content: |
       A researcher's commits live on experiment branches that were never merged, in pull requests
@@ -18,6 +18,7 @@
 import concurrent.futures
 import dataclasses
 import datetime as dt
+import itertools
 import pathlib
 import sys
 
@@ -40,8 +41,8 @@ class Commit:
     repos: set[str]
 
 
-def read_repository(store: pathlib.Path, emails: set[str], repo: str) -> list[tuple[str, dt.datetime, str]]:
-    """Fetch `repo` into its mirror under `store`; return (sha, utc, message) of commits by `emails`."""
+def fetch(store: pathlib.Path, repo: str) -> pathlib.Path:
+    """Bring `repo`'s mirror under `store` up to date and return its directory."""
     directory = store / repo.replace('/', '__')
     if not directory.exists():
         run('git', 'init', '--bare', str(directory))
@@ -51,6 +52,11 @@ def read_repository(store: pathlib.Path, emails: set[str], repo: str) -> list[tu
         git(directory, 'config', 'remote.origin.partialclonefilter', 'tree:0')
     git(directory, '-c', 'gc.auto=0', 'fetch', '--filter=tree:0', '--no-recurse-submodules',
         '--no-auto-maintenance', 'origin', *REFSPECS)
+    return directory
+
+
+def scan(directory: pathlib.Path, emails: set[str]) -> list[tuple[str, dt.datetime, str]]:
+    """(sha, utc, message) of every commit in the mirror authored under one of `emails`."""
     # Only commit records are read; asking for trees or diffs would download file contents.
     log = git(directory, 'log', '--all', f'--format={LOG_FORMAT}').decode(errors='replace')
     rows = []
@@ -63,15 +69,25 @@ def read_repository(store: pathlib.Path, emails: set[str], repo: str) -> list[tu
     return rows
 
 
-def collect(account: Account, emails: set[str], store: pathlib.Path) -> list[Commit]:
-    """Every commit authored under `emails` in any discovered repository, newest first."""
-    repos = sorted({repo for source in REPOSITORY_SOURCES for repo in source(account)})
-    commits = {}
+def collect(account: Account, extra_emails: set[str], store: pathlib.Path) -> list[Commit]:
+    """Every commit authored under the account's or `extra_emails` addresses, newest first."""
+    fetches = {}
+    fetched = itertools.count(1)
     with concurrent.futures.ThreadPoolExecutor(WORKERS) as pool:
-        futures = {pool.submit(read_repository, store, emails, repo): repo for repo in repos}
-        for done, future in enumerate(concurrent.futures.as_completed(futures), 1):
-            repo, rows = futures[future], future.result()
-            print(f'[{done}/{len(repos)}] {repo}: {len(rows)} commits', file=sys.stderr, flush=True)
+        for source in REPOSITORY_SOURCES:
+            for repo in source(account):
+                # A repository starts fetching as soon as it is found, while discovery continues.
+                if repo not in fetches:
+                    fetches[repo] = pool.submit(fetch, store, repo)
+                    # A failure is printed when it happens; the run raises it once discovery ends.
+                    fetches[repo].add_done_callback(lambda future, repo=repo: print(
+                        f'[{next(fetched)}/{len(fetches)}] {repo}: {future.exception() or "fetched"}',
+                        file=sys.stderr, flush=True))
+        # The address search is the slowest discovery step, so it runs while the fetches proceed.
+        emails = account.emails | extra_emails
+        directories = [future.result() for future in fetches.values()]
+        commits = {}
+        for repo, rows in zip(fetches, pool.map(scan, directories, itertools.repeat(emails))):
             for sha, utc, message in rows:
                 # One hash is one commit even when several forks contain it.
                 commits.setdefault(sha, Commit(sha, utc, message, set())).repos.add(repo)

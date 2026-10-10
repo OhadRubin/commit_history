@@ -35,6 +35,6 @@ def main() -> None:
     args = parser.parse_args()
     account = Account()
     args.store.mkdir(parents=True, exist_ok=True)
-    commits = collect(account, account.emails | {email.lower() for email in args.email}, args.store)
+    commits = collect(account, {email.lower() for email in args.email}, args.store)
     write_yaml(commits, account.login, args.output)
     print(f'Wrote {len(commits)} commits to {args.output}', file=sys.stderr)

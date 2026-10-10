@@ -65,14 +65,14 @@ def remembered(account):
     yield 'someone/old-project'
 
 account = g.Account()
-commits = g.collect(account, account.emails, pathlib.Path('/tmp/mirrors'))
+commits = g.collect(account, set(), pathlib.Path('/tmp/mirrors'))
 g.write_yaml(commits, account.login, pathlib.Path('commits.yaml'))
 ```
 
 ## Verification
 
 ```bash
-uv run python tests/e2e.py out.yaml --store DIR [--email ADDRESS ...]
+uv run python tests/e2e.py out.yaml MIRRORS_DIR [EXTRA_ADDRESS ...]
 ```
 
-This runs the command-line tool, then checks two things: the file is ordered newest first, and every commit GitHub search credits to you is in it. The results go to `out.e2e.json`.
+This collects and exports your commits, then checks two things: the file is ordered newest first, and every commit GitHub search credits to you is in it. The results go to `out.e2e.json`.
