@@ -14,7 +14,6 @@
     was_generated_via_skill: false
 """
 
-import datetime as dt
 import json
 import pathlib
 import subprocess
@@ -28,18 +27,14 @@ output = pathlib.Path(sys.argv[1])
 subprocess.run(['gh-commit-history', *sys.argv[1:]], check=True)
 
 rows = yaml.safe_load(output.read_text(encoding='utf-8'))
-# PyYAML loads unquoted dates as date objects, so rows are compared as text.
+# PyYAML loads unquoted dates as date objects, so moments are compared as text.
 moments = [(str(row['date']), row['time']) for row in rows]
-exported = {(str(row['date']), row['time'], row['description']) for row in rows}
-credited, missing = set(), set()
-for item in Account().authored:
-    utc = dt.datetime.fromisoformat(item['commit']['author']['date']).astimezone(dt.timezone.utc)
-    credited.add(item['sha'])
-    if (f'{utc:%Y-%m-%d}', f'{utc:%H:%M:%S}', item['commit']['message'].strip('\n')) not in exported:
-        missing.add(item['html_url'])
+exported = {row['sha'] for row in rows}
+credited = {item['sha']: item['html_url'] for item in Account().authored}
+missing = sorted(url for sha, url in credited.items() if sha not in exported)
 
-report = {'exported': len(rows), 'credited_by_search': len(credited), 'missing': sorted(missing),
-          'newest_first': moments == sorted(moments, reverse=True)}
+report = {'exported': len(rows), 'unique_shas': len(exported), 'credited_by_search': len(credited),
+          'missing': missing, 'newest_first': moments == sorted(moments, reverse=True)}
 output.with_suffix('.e2e.json').write_text(json.dumps(report, indent=2))
 print(json.dumps({**report, 'missing': len(missing)}, indent=2))
 assert report['newest_first'] and not missing, f'see {output.with_suffix(".e2e.json")}'

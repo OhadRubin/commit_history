@@ -26,6 +26,7 @@ From a clone, run `uv run gh-commit-history ...` instead.
 ```yaml
 # Dates and times are UTC. Newest commits first.
 - repo: you/project
+  sha: a0404308de88a54044384e7ad8b19ceaaa32d52a
   description: |-
     Add the parser
 
@@ -34,7 +35,7 @@ From a clone, run `uv run gh-commit-history ...` instead.
   time: 06:35:21
 ```
 
-A commit found in several repositories, such as a fork and its source, is listed once. It appears under your own copy when you have one.
+`https://github.com/{repo}/commit/{sha}` opens the commit on GitHub. A commit found in several repositories, such as a fork and its source, is listed once. It appears under your own copy when you have one.
 
 ## How commits are found
 
